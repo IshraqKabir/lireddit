@@ -12,7 +12,11 @@ type InputFieldProps = InputHTMLAttributes<HTMLInputElement> & {
   label: string;
 };
 
-export function InputField({ label, size: _, ...props }: InputFieldProps): ReactElement | null {
+export function InputField({
+  label,
+  size: _,
+  ...props
+}: InputFieldProps): ReactElement | null {
   const [field, { error }] = useField(props);
 
   return (

@@ -3,16 +3,18 @@ import { Formik, Form } from "formik";
 import { Wrapper } from "../components/Wrapper";
 import { InputField } from "../components/InputField";
 import { Box, Button } from "@chakra-ui/react";
-import {useRegisterMutation} from "../generated/graphql";
-import {toErrorMap} from "../utils/toErrorMap";
-import {useRouter} from "next/router";
+import { useLoginUserMutation } from "../generated/graphql";
+import { toErrorMap } from "../utils/toErrorMap";
+import { useRouter } from "next/router";
+import {withUrqlClient} from "next-urql";
+import {createUrqlClient} from "../utils/createUrqlClient";
 
-export interface registerProps {}
+export interface loginProps {}
 
-export default function Register({}: registerProps): ReactElement | null {
+function Login({}: loginProps): ReactElement | null {
   const router = useRouter();
 
-  const [, register] = useRegisterMutation();
+  const [, login] = useLoginUserMutation();
 
   return (
     <Wrapper variant="small">
@@ -20,16 +22,15 @@ export default function Register({}: registerProps): ReactElement | null {
         initialValues={{ username: "", password: "" }}
         onSubmit={async (values, { setErrors }) => {
           console.log(values);
-          const { data } = await register(values);
-          const { user, errors } = data?.registerUser;
+          const { data } = await login(values);
+          const { user, errors } = data?.loginUser;
 
           if (errors) {
             setErrors(toErrorMap(errors));
           } else if (user) {
             // navigate
-            router.push('/');
+            router.push("/");
           }
-
         }}
       >
         {({ isSubmitting }) => (
@@ -53,7 +54,7 @@ export default function Register({}: registerProps): ReactElement | null {
               mt={4}
               isLoading={isSubmitting}
             >
-              Register
+              Login
             </Button>
           </Form>
         )}
@@ -61,3 +62,4 @@ export default function Register({}: registerProps): ReactElement | null {
     </Wrapper>
   );
 }
+export default withUrqlClient(createUrqlClient)(Login);
