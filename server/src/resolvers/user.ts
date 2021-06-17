@@ -55,7 +55,6 @@ export class UserResolver {
     return user;
   }
 
-<<<<<<< HEAD
   @Query(() => [User])
   async users(
     @Ctx() { em }: MyContext
@@ -66,8 +65,6 @@ export class UserResolver {
     return users;
   }
 
-=======
->>>>>>> 4c238c2ece569165ed6dc4ceaf4e3644c61d9133
   @Mutation(() => UserResponse)
   async registerUser(
     @Arg("options") options: UsernamePasswordInput,
