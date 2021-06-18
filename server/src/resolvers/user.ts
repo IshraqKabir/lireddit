@@ -1,47 +1,46 @@
 import { MyContext } from "../types";
-import {
-  Arg,
-  Ctx,
-  Field,
-  InputType,
-  Mutation,
-  ObjectType,
-  Resolver,
-  Query,
-} from "type-graphql";
+import { Arg, Ctx, Mutation, Resolver, Query } from "type-graphql";
 import { User } from "../entities/User";
 import argon2 from "argon2";
-import { COOKIE_NAME } from "../constants";
-
-@InputType()
-class UsernamePasswordInput {
-  @Field()
-  username: string;
-
-  @Field()
-  password: string;
-}
-
-@ObjectType()
-class FieldError {
-  @Field()
-  field: string;
-
-  @Field()
-  message: string;
-}
-
-@ObjectType()
-class UserResponse {
-  @Field(() => [FieldError], { nullable: true })
-  errors?: FieldError[];
-
-  @Field(() => User, { nullable: true })
-  user?: User;
-}
+import { COOKIE_NAME, FORGOT_PASSWORD_PREFIX } from "../constants";
+import { UsernamePasswordInput } from "../utils/validation/inputType/UsernamePasswordInput";
+import { validateUserRegister } from "../utils/validation/validateUserRegister";
+import { UserResponse } from "../utils/validation/objectType/UserResponse";
+import { validateEmail } from "../utils/validateEmail";
+import { sendEmail } from "../utils/sendEmail";
+import { v4 } from "uuid";
 
 @Resolver()
 export class UserResolver {
+  @Mutation(() => Boolean)
+  async forgotPassword(
+    @Arg("email") email: string,
+    @Ctx() { em, redis }: MyContext
+  ) {
+    const user = await em.findOne(User, { email });
+
+    if (!user) {
+      // the email is not in the db
+      // no need to inform the user
+      return true;
+    }
+
+    const token = v4();
+
+    await redis.set(
+      `${FORGOT_PASSWORD_PREFIX}${token}`,
+      user.id,
+      "ex",
+      1000 * 60 * 15 // 15 minutes
+    );
+
+    await sendEmail(
+      email,
+      `<a href="http://localhost:3000/change-password/${token}">Click Here To Change Password</a>`
+    );
+    return true;
+  }
+
   @Query(() => User, { nullable: true })
   async me(@Ctx() { req, em }: MyContext) {
     // not logged in
@@ -66,65 +65,67 @@ export class UserResolver {
     @Arg("options") options: UsernamePasswordInput,
     @Ctx() { em }: MyContext
   ): Promise<UserResponse> {
-    const { username, password } = options;
+    const { email, username, password } = options;
 
-    if (username.length < 3) {
-      return {
-        errors: [
-          {
-            field: "username",
-            message: "username has to be atleaset 3 characters long.",
-          },
-        ],
-      };
+    const errors = validateUserRegister(options);
+
+    if (errors) {
+      return { errors };
     }
 
-    if (password.length < 3) {
-      return {
-        errors: [
-          {
-            field: "password",
-            message: "password has to be atleaset 3 characters long.",
-          },
-        ],
-      };
+    const matchingEmail = await em.findOne(User, { email });
+
+    if (matchingEmail) {
+      const errors = [
+        {
+          field: "email",
+          message: "email already exists",
+        },
+      ];
+
+      return { errors };
     }
 
-    const matchingUser = await em.findOne(User, { username });
+    const matchingUsername = await em.findOne(User, { username });
 
-    if (matchingUser) {
-      return {
-        errors: [
-          {
-            field: "username",
-            message: "username already exists",
-          },
-        ],
-      };
+    if (matchingUsername) {
+      const errors = [
+        {
+          field: "username",
+          message: "username already exists",
+        },
+      ];
+
+      return { errors };
     }
-
     const hashedPassword = await argon2.hash(password);
 
-    const user = em.create(User, { username, password: hashedPassword });
+    const user = em.create(User, { username, email, password: hashedPassword });
     await em.persistAndFlush(user);
     return { user };
   }
 
   @Mutation(() => UserResponse)
   async loginUser(
-    @Arg("options") options: UsernamePasswordInput,
+    @Arg("usernameOrEmail") usernameOrEmail: string,
+    @Arg("password") password: string,
     @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
-    const { username, password } = options;
-
-    const user = await em.findOne(User, { username: username.toLowerCase() });
+    const user = await em.findOne(
+      User,
+      usernameOrEmail.includes("@")
+        ? { email: usernameOrEmail }
+        : { username: usernameOrEmail }
+    );
 
     if (!user) {
       return {
         errors: [
           {
-            field: "username",
-            message: "username doesn't exist",
+            field: "usernameOrEmail",
+            message: `${
+              validateEmail(usernameOrEmail) ? "Email" : "Username"
+            } doesn't exist`,
           },
         ],
       };

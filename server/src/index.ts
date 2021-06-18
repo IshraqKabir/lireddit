@@ -10,7 +10,7 @@ import { HelloResolver } from "./resolvers/hello";
 import { PostResolver } from "./resolvers/post";
 import { UserResolver } from "./resolvers/user";
 
-import redis from "redis";
+import Redis from "ioredis";
 import session from "express-session";
 import connectRedis from "connect-redis";
 import { MyContext } from "./types";
@@ -22,8 +22,8 @@ const main = async () => {
   const app = express();
 
   const RedisStore = connectRedis(session);
-  const redisClient = redis.createClient({
-    auth_pass:
+  const redis = new Redis({
+    password:
       "jMlRRr1wlNCBZVq0SeCSZ5DKbvHVU+sfjKDK2D56Hl6tYzdpQX5CgMgWrxCqRn8cdLDERUQ5GNh9B12T",
   });
 
@@ -38,7 +38,7 @@ const main = async () => {
     session({
       name: COOKIE_NAME,
       store: new RedisStore({
-        client: redisClient,
+        client: redis,
         disableTouch: true,
       }),
       cookie: {
@@ -57,7 +57,7 @@ const main = async () => {
       resolvers: [HelloResolver, PostResolver, UserResolver],
       validate: false,
     }),
-    context: ({ req, res }: MyContext) => ({ em: orm.em, req, res }),
+    context: ({ req, res }: MyContext) => ({ em: orm.em, req, res, redis }),
   });
 
   apolloServer.applyMiddleware({
